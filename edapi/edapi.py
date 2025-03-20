@@ -5,9 +5,8 @@ Module for interacting with the Ed API.
 import json
 import os
 from typing import NoReturn, Optional
-
+from datetime import datetime
 import requests
-from dotenv import find_dotenv, load_dotenv
 from requests.compat import urljoin
 
 from edapi.types.api_types.endpoints.analytics import API_Analytics_Users_Response
@@ -29,12 +28,15 @@ from .types.api_types.endpoints.threads import (
 from .types.api_types.endpoints.user import API_User_Response
 from .types.api_types.thread import API_Thread_WithComments, API_Thread_WithUser
 from .types.api_types.user import API_User_WithEmail
+from .models.thread import SimpleThread, SimpleThreadWithComments
+from .models.user import User
 
-ANSI_BLUE = lambda text: f"\u001b[34m{text}\u001b[0m"
-ANSI_GREEN = lambda text: f"\u001b[32m{text}\u001b[0m"
-ANSI_RED = lambda text: f"\u001b[31m{text}\u001b[0m"
 
-API_BASE_URL = "https://us.edstem.org/api/"
+def ANSI_BLUE(text): return f"\u001b[34m{text}\u001b[0m"
+def ANSI_GREEN(text): return f"\u001b[32m{text}\u001b[0m"
+def ANSI_RED(text): return f"\u001b[31m{text}\u001b[0m"
+
+
 STATIC_FILE_BASE_URL = "https://static.us.edusercontent.com/files/"
 
 API_TOKEN_ENV_VAR = "ED_API_TOKEN"
@@ -87,7 +89,7 @@ class EdAPI:
     This class is responsible for authenticating the user, and for making API calls to the Ed API.
     """
 
-    def __init__(self, api_token: Optional[str] = None, interactive=True):
+    def __init__(self, api_token: str, base_url="https://edstem.org/api/", interactive=True):
         """
         Initialize the Ed API.
 
@@ -100,40 +102,19 @@ class EdAPI:
         and methods will raise an error.
 
         The `login()` method can still be called for interactive behavior.
+
         """
+        if api_token is None:
+            _throw_error("No API token was provided.", b"")
         self.api_token = api_token
         self.interactive = interactive
+        self.api_base_url = base_url
         self.session = requests.Session()
-
-        if self.api_token is None:
-            # only attempt to load the API token from a .env file if none is specified.
-            self._load_api_token()
-
-    def _load_api_token(self) -> Optional[API_User_Response]:
-        """
-        Read the API token from .env file; defaults to None if not found.
-
-        Utilizes the `/api/user` endpoint to verify the token;
-        returns the response if successful.
-        """
-        load_dotenv(find_dotenv(usecwd=True))
-        self.api_token = os.getenv(API_TOKEN_ENV_VAR, None)
-        if self.api_token is None:
-            # unable to load API token
-            return None
-
-        # save session header as well
         self.session.headers.update(self._auth_header)
-
-        # authorization check
         try:
-            return self.get_user_info()
+            self.user_info = self.get_user_info()
         except EdAuthError:
-            # invalid api token; don't keep it
-            self.api_token = None
-            self._remove_auth_header()
-
-        return None
+            _throw_error("Invalid API token.", b"")
 
     def login(self):
         """
@@ -150,17 +131,17 @@ class EdAPI:
 
             if self.api_token is None:
                 print(
-                    ANSI_RED("Invalid API Token; make sure you have the correct token.")
+                    ANSI_RED(
+                        "Invalid API Token; make sure you have the correct token.")
                 )
 
         if user_info is None:
             # only way this is reached is if the token was initially loaded successfully.
-            user_info = self.get_user_info()
+            user_info: User = self.get_user_info()
 
         # print login welcome message
-        user_dict = user_info["user"]
-        user_name = user_dict["name"]
-        user_email = user_dict["email"]
+        user_name = user_info.name
+        user_email = user_info.email
         print(
             "Authentication successful;",
             f"logged in as {ANSI_GREEN(user_name)} ({ANSI_BLUE(user_email)})",
@@ -180,14 +161,15 @@ class EdAPI:
         del self.session.headers["Authorization"]
 
     @_ensure_login
-    def get_user_info(self) -> API_User_Response:
+    def get_user_info(self) -> User:
         """
         Retrieve the user info from Ed.
         """
-        user_info_url = urljoin(API_BASE_URL, "user")
+        user_info_url = urljoin(self.api_base_url, "user")
         response = self.session.get(user_info_url)
         if response.ok:
-            return response.json()
+            response_json: API_User_Response = response.json()
+            return User.from_api_response(response_json)
 
         _throw_error("Failed to get user info.", response.content)
 
@@ -211,7 +193,8 @@ class EdAPI:
 
         GET /api/users/<user_id>/profile/activity?courseID=<course_id>
         """
-        list_url = urljoin(API_BASE_URL, f"users/{user_id}/profile/activity")
+        list_url = urljoin(self.api_base_url,
+                           f"users/{user_id}/profile/activity")
         response = self.session.get(
             list_url,
             params={
@@ -233,7 +216,7 @@ class EdAPI:
     @_ensure_login
     def list_threads(
         self, /, course_id: int, *, limit: int = 30, offset: int = 0, sort: str = "new"
-    ) -> list[API_Thread_WithUser]:
+    ) -> list[SimpleThread]:
         """
         Retrieve list of threads, with the given limit, offset, and sort.
 
@@ -243,17 +226,33 @@ class EdAPI:
 
         GET /api/courses/<course_id>/threads
         """
-        list_url = urljoin(API_BASE_URL, f"courses/{course_id}/threads")
+        list_url = urljoin(self.api_base_url, f"courses/{course_id}/threads")
         response = self.session.get(
             list_url, params={"limit": limit, "offset": offset, "sort": sort}
         )
         if response.ok:
             response_json: API_ListThreads_Response = response.json()
-            return response_json["threads"]
+            api_threads = response_json["threads"]
+            return [SimpleThread.model_validate(thread) for thread in api_threads]
 
         _throw_error(
             f"Failed to list threads for course {course_id}.", response.content
         )
+
+    def list_last_updated_threads(self, course_id: int, date: datetime, limit=100, offset=0, sort="new") -> list[SimpleThread]:
+        """
+        Retrieve list of threads, with the given limit, offset, and sort.
+
+        Limit can range from 1 to 100 (anything higher will get clipped to 100).
+        Offset can be used to list out all of the threads in a course iteratively,
+        through pagination.
+
+        GET /api/courses/<course_id>/threads
+        """
+        threads = self.list_threads(
+            course_id, limit=limit, offset=offset, sort=sort)
+        print(threads[0].updated_at)
+        return [thread for thread in threads if thread.updated_at > date]
 
     def list_users(self, /, course_id: int) -> list[API_User_WithEmail]:
         """
@@ -261,13 +260,15 @@ class EdAPI:
 
         GET /api/courses/<course_id>/analytics/users
         """
-        list_url = urljoin(API_BASE_URL, f"courses/{course_id}/analytics/users")
+        list_url = urljoin(
+            self.api_base_url, f"courses/{course_id}/analytics/users")
         response = self.session.get(list_url)
         if response.ok:
             response_json: API_Analytics_Users_Response = response.json()
             return response_json["users"]
 
-        _throw_error(f"Failed to list users for course {course_id}", response.content)
+        _throw_error(
+            f"Failed to list users for course {course_id}", response.content)
 
     @_ensure_login
     def get_thread(self, thread_id: int) -> API_Thread_WithComments:
@@ -276,7 +277,7 @@ class EdAPI:
 
         GET /api/threads/<thread_id>
         """
-        thread_url = urljoin(API_BASE_URL, f"threads/{thread_id}")
+        thread_url = urljoin(self.api_base_url, f"threads/{thread_id}")
         response = self.session.get(thread_url)
         if response.ok:
             response_json: API_GetThread_Response = response.json()
@@ -287,21 +288,39 @@ class EdAPI:
     @_ensure_login
     def get_course_thread(
         self, course_id: int, thread_number: int
-    ) -> API_Thread_WithComments:
+    ) -> SimpleThreadWithComments:
         """
         Retrieve the details for a thread in a given course, using the thread number.
 
         GET /api/courses/<course_id>/threads/<thread_id>
         """
         thread_url = urljoin(
-            API_BASE_URL, f"courses/{course_id}/threads/{thread_number}"
+            self.api_base_url, f"courses/{course_id}/threads/{thread_number}"
         )
         response = self.session.get(thread_url)
         if response.ok:
             response_json: API_GetThread_Response = response.json()
-            return response_json["thread"]
+            thread_api_res = response_json["thread"]
+            return SimpleThreadWithComments.model_validate(thread_api_res)
 
-        _throw_error(f"Failed to get thread {thread_number}.", response.content)
+        _throw_error(
+            f"Failed to get thread {thread_number}.", response.content)
+
+    def get_course_threads_by_id(self, thread_id: int) -> SimpleThreadWithComments:
+        """
+        Retrieve the details for a thread in a given course, using the thread number.
+
+        GET /api/courses/<course_id>/threads/<thread_id>
+        """
+        thread_url = urljoin(self.api_base_url, f"threads/{thread_id}")
+        response = self.session.get(thread_url)
+        if response.ok:
+            response_json: API_GetThread_Response = response.json()
+            thread_api_res = response_json["thread"]
+            return SimpleThreadWithComments.model_validate(thread_api_res)
+
+        _throw_error(
+            f"Failed to get thread {thread_id}.", response.content)
 
     @_ensure_login
     def post_thread(
@@ -314,13 +333,14 @@ class EdAPI:
 
         Returns newly created thread object.
         """
-        thread_url = urljoin(API_BASE_URL, f"courses/{course_id}/threads")
+        thread_url = urljoin(self.api_base_url, f"courses/{course_id}/threads")
         response = self.session.post(thread_url, json={"thread": params})
         if response.ok:
             response_json: API_PostThread_Response = response.json()
             return response_json["thread"]
 
-        _throw_error(f"Failed to post thread in course {course_id}.", response.content)
+        _throw_error(
+            f"Failed to post thread in course {course_id}.", response.content)
 
     @_ensure_login
     def edit_thread(
@@ -354,7 +374,7 @@ class EdAPI:
             if key in thread and val is not None:
                 thread[key] = val
 
-        thread_url = urljoin(API_BASE_URL, f"threads/{thread_id}")
+        thread_url = urljoin(self.api_base_url, f"threads/{thread_id}")
         request_json: API_PutThread_Request = {"thread": thread}
         response = self.session.put(thread_url, json=request_json)
         if response.ok:
@@ -381,7 +401,7 @@ class EdAPI:
 
         Returns the static URL for the uploaded file.
         """
-        upload_url = urljoin(API_BASE_URL, "files")
+        upload_url = urljoin(self.api_base_url, "files")
         # send file through formdata
         formdata = {"attachment": (filename, file, content_type)}
         response = self.session.post(upload_url, files=formdata)
@@ -399,10 +419,11 @@ class EdAPI:
 
         POST /api/threads/<thread_id>/lock
         """
-        lock_url = urljoin(API_BASE_URL, f"threads/{thread_id}/lock")
+        lock_url = urljoin(self.api_base_url, f"threads/{thread_id}/lock")
         response = self.session.post(lock_url)
         if not response.ok:
-            _throw_error(f"Failed to lock thread {thread_id}.", response.content)
+            _throw_error(
+                f"Failed to lock thread {thread_id}.", response.content)
 
     @_ensure_login
     def unlock_thread(self, thread_id: int) -> None:
@@ -411,7 +432,8 @@ class EdAPI:
 
         POST /api/threads/<thread_id>/unlock
         """
-        unlock_url = urljoin(API_BASE_URL, f"threads/{thread_id}/unlock")
+        unlock_url = urljoin(self.api_base_url, f"threads/{thread_id}/unlock")
         response = self.session.post(unlock_url)
         if not response.ok:
-            _throw_error(f"Failed to unlock thread {thread_id}.", response.content)
+            _throw_error(
+                f"Failed to unlock thread {thread_id}.", response.content)
