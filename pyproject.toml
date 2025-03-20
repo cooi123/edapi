@@ -22,7 +22,10 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = [
+    "python-dotenv",
+    "pandas>=2.2.3",
+]
+build = [
     "build>=1.2.2.post1",
     "twine>=6.1.0",
-    "python-dotenv",
 ]

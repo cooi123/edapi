@@ -65,8 +65,14 @@ There are utility methods included to help with the process of creating thread d
 - `parse_document(content: str)`: parses the content string, which holds the XML content of a thread.
   - Similar to `new_document`, returns a new `BeautifulSoup` instance for the parsed document, along with the root document tag.
 
+### install dependencies to run examples scripts
+
+uv pip install -e ".[dev]"
+uv run .\examples\getuserinfo.py
+
 ### Build package using uv
 
+uv pip install -e ".[build]"
 uv build
 uv publish
 
