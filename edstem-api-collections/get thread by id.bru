@@ -1,0 +1,15 @@
+meta {
+  name: get thread by id
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/threads/2262728
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{api_token}}
+}

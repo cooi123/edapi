@@ -1,0 +1,21 @@
+meta {
+  name: get thread from course
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/courses/{{course_id}}/threads?sort=new
+  body: none
+  auth: bearer
+}
+
+params:query {
+  sort: new
+  ~limit: 100
+  ~filter: unanswered
+}
+
+auth:bearer {
+  token: {{api_token}}
+}
