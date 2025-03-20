@@ -1,98 +1,43 @@
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
+from enum import Enum
+from edapi.types.api_types.endpoints.user import API_User_Response
+from .course import CourseInfo, CourseStatus
+import json
 
 
-class Category(BaseModel):
-    name: str
-    subcategories: List['Category'] = []
-    thread_template: Optional[str] = None
-
-
-class CourseSettings(BaseModel):
-    default_page: str
-    discussion: Dict[str, Any]
-    # Add other settings as needed
-
-
-class CourseInfo(BaseModel):
-    id: int
-    code: str
-    name: str
-    year: str
-    session: str
-    status: str
-    created_at: str
-
-
-class CourseRole(BaseModel):
-    user_id: int
-    course_id: int
-    lab_id: Optional[int] = None
-    role: str
-    tutorial: Optional[str] = None
-
-
-class UserCourse(BaseModel):
-    course: CourseInfo
-    role: CourseRole
-    last_active: str
-    lab: Optional[Any] = None
-
-
-class UserInfoSummary(BaseModel):
-    """A simplified model containing just the essential user info."""
-    name: str
-    email: str
-    courses: List[Dict[str, Any]]
 
 
 class User(BaseModel):
+    """
+    Extract user data from the API response and transform it into our model. 
+    Removed redundant fields and added various helper methods
+    """
     id: int
     name: str
     email: str
-    courses: List[UserCourse]
+    courses: List[CourseInfo]
 
-    def get_course_by_id(self, course_id: int) -> Optional[UserCourse]:
+    def get_course_by_id(self, course_id: int) -> Optional[CourseInfo]:
         """Get a course by its ID"""
         for course in self.courses:
             if course.course.id == course_id:
                 return course
         return None
 
-    def get_course_by_code(self, code: str) -> Optional[UserCourse]:
+    def get_course_by_code(self, code: str) -> Optional[CourseInfo]:
         """Get a course by its code"""
         for course in self.courses:
             if course.course.code == code:
                 return course
         return None
 
-    def get_user_info_summary(self) -> UserInfoSummary:
-        """Returns a simplified object with essential user information."""
-        course_list = []
-        for course in self.courses:
-            c = course.course
-            course_list.append({
-                'id': c.id,
-                'code': c.code,
-                'name': c.name,
-                'year': c.year,
-                'session': c.session,
-                'status': c.status,
-                'role': course.role.role
-            })
-
-        return UserInfoSummary(
-            name=self.name,
-            email=self.email,
-            courses=course_list
-        )
-
-    def get_active_courses(self) -> List[UserCourse]:
+    def get_active_courses(self) -> List[CourseInfo]:
         """Returns a list of active courses."""
-        return [course for course in self.courses if course.last_active]
+        return [course for course in self.courses if course.status == CourseStatus.ACTIVE]
 
     @classmethod
-    def from_api_response(cls, api_response: Dict[str, Any]) -> "User":
+    def from_api_response(cls, api_response:API_User_Response ) -> "User":
         """
         Create a User instance from the EdAPI response.
 
@@ -115,35 +60,17 @@ class User(BaseModel):
         courses = []
         for course_data in courses_data:
             # Create the CourseInfo object
+            course_status_str = course_data.get('course', {}).get('status', CourseStatus.ARCHIVED)
             course_info = CourseInfo(
                 id=course_data.get('course', {}).get('id', 0),
                 code=course_data.get('course', {}).get('code', ''),
                 name=course_data.get('course', {}).get('name', ''),
                 year=course_data.get('course', {}).get('year', ''),
                 session=course_data.get('course', {}).get('session', ''),
-                status=course_data.get('course', {}).get('status', ''),
-                created_at=course_data.get('course', {}).get('created_at', '')
-            )
-
-            # Create the CourseRole object
-            role_data = course_data.get('role', {})
-            course_role = CourseRole(
-                user_id=role_data.get('user_id', 0),
-                course_id=role_data.get('course_id', 0),
-                lab_id=role_data.get('lab_id'),
-                role=role_data.get('role', ''),
-                tutorial=role_data.get('tutorial')
-            )
-
-            # Create the UserCourse object
-            user_course = UserCourse(
-                course=course_info,
-                role=course_role,
-                last_active=course_data.get('last_active', ''),
-                lab=course_data.get('lab')
-            )
-
-            courses.append(user_course)
+                status=CourseStatus(course_status_str) ,
+                created_at=course_data.get('course', {}).get('created_at', ''),
+                last_active=course_data.get('last_active', '') )
+            courses.append(course_info)
 
         return cls(**{
             'id': user_data.get('id', 0),
@@ -151,3 +78,15 @@ class User(BaseModel):
             'email': user_data.get('email', ''),
             'courses': courses
         })
+    
+    def __str__(self) -> str:
+        """Format User as a pretty-printed JSON string"""
+        return json.dumps(self.model_dump(), indent=2, default=str)
+    
+    def __repr__(self) -> str:
+        """Return a string representation of User"""
+        return f"User(id={self.id}, name='{self.name}', courses={len(self.courses)})"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert User to a dictionary"""
+        return self.model_dump()
