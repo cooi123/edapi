@@ -34,6 +34,9 @@ jobs:
         run: |
           sed -i "s/version = \"[0-9]*\.[0-9]*\.[0-9]*\"/version = \"${{ steps.get_version.outputs.version }}\"/g" pyproject.toml
 
+      - name: install dependencies
+        run: uv pip install -e ".[build]"
+
       - name: Build package
         run: uv build
 
