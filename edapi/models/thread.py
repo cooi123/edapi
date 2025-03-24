@@ -3,13 +3,13 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
-class SimpleThreadUser(BaseModel):
+class ThreadUser(BaseModel):
     """Simplified user information."""
     id: int
     name: str
 
 
-class SimpleThreadComment(BaseModel):
+class ThreadComment(BaseModel):
     """Simplified comment model with only essential fields."""
     id: int
     user_id: int
@@ -25,7 +25,7 @@ class SimpleThreadComment(BaseModel):
         extra = 'ignore'  # Ignore extra fields in the API response
 
 
-class SimpleThread(BaseModel):
+class Thread(BaseModel):
     """Simplified thread model with only the fields you need."""
     id: int
     user_id: int
@@ -40,12 +40,12 @@ class SimpleThread(BaseModel):
     vote_count: int
     created_at: datetime
     updated_at: datetime
-    user: Optional[SimpleThreadUser] = None
+    user: Optional[ThreadUser] = None
 
     class Config:
         extra = 'ignore'  # Ignore extra fields in the API response
 
 
-class SimpleThreadWithComments(SimpleThread):
+class ThreadWithComments(Thread):
     """Thread with comments included."""
-    comments: List[SimpleThreadComment] = []
+    comments: List[ThreadComment] = []

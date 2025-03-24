@@ -8,11 +8,12 @@ load_dotenv()
 
 ed = EdAPI(os.getenv("ED_API_TOKEN"))
 
-user:User = ed.get_user_info()
+user: User = ed.get_user_info()
 active_courses = user.get_active_courses()
 print(f"Hello {user.name}!")
-#convert active courses into pandas df
-active_courses_df = pd.DataFrame([course.to_dict() for course in active_courses])
+# convert active courses into pandas df
+active_courses_df = pd.DataFrame(
+    [course.to_dict() for course in active_courses])
 print(active_courses_df)
-
-
+threads = ed.list_threads(course_id=active_courses[0].id)
+print(threads)

@@ -28,7 +28,7 @@ from .types.api_types.endpoints.threads import (
 from .types.api_types.endpoints.user import API_User_Response
 from .types.api_types.thread import API_Thread_WithComments, API_Thread_WithUser
 from .types.api_types.user import API_User_WithEmail
-from .models.thread import SimpleThread, SimpleThreadWithComments
+from .models.thread import Thread, ThreadWithComments
 from .models.user import User
 
 
@@ -216,7 +216,7 @@ class EdAPI:
     @_ensure_login
     def list_threads(
         self, /, course_id: int, *, limit: int = 30, offset: int = 0, sort: str = "new"
-    ) -> list[SimpleThread]:
+    ) -> list[Thread]:
         """
         Retrieve list of threads, with the given limit, offset, and sort.
 
@@ -233,13 +233,13 @@ class EdAPI:
         if response.ok:
             response_json: API_ListThreads_Response = response.json()
             api_threads = response_json["threads"]
-            return [SimpleThread.model_validate(thread) for thread in api_threads]
+            return [Thread.model_validate(thread) for thread in api_threads]
 
         _throw_error(
             f"Failed to list threads for course {course_id}.", response.content
         )
 
-    def list_last_updated_threads(self, course_id: int, date: datetime, limit=100, offset=0, sort="new") -> list[SimpleThread]:
+    def list_last_updated_threads(self, course_id: int, date: datetime, limit=100, offset=0, sort="new") -> list[Thread]:
         """
         Retrieve list of threads, with the given limit, offset, and sort.
 
@@ -288,7 +288,7 @@ class EdAPI:
     @_ensure_login
     def get_course_thread(
         self, course_id: int, thread_number: int
-    ) -> SimpleThreadWithComments:
+    ) -> ThreadWithComments:
         """
         Retrieve the details for a thread in a given course, using the thread number.
 
@@ -301,12 +301,12 @@ class EdAPI:
         if response.ok:
             response_json: API_GetThread_Response = response.json()
             thread_api_res = response_json["thread"]
-            return SimpleThreadWithComments.model_validate(thread_api_res)
+            return ThreadWithComments.model_validate(thread_api_res)
 
         _throw_error(
             f"Failed to get thread {thread_number}.", response.content)
 
-    def get_course_threads_by_id(self, thread_id: int) -> SimpleThreadWithComments:
+    def get_course_threads_by_id(self, thread_id: int) -> ThreadWithComments:
         """
         Retrieve the details for a thread in a given course, using the thread number.
 
@@ -317,7 +317,7 @@ class EdAPI:
         if response.ok:
             response_json: API_GetThread_Response = response.json()
             thread_api_res = response_json["thread"]
-            return SimpleThreadWithComments.model_validate(thread_api_res)
+            return ThreadWithComments.model_validate(thread_api_res)
 
         _throw_error(
             f"Failed to get thread {thread_id}.", response.content)

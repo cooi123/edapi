@@ -7,10 +7,10 @@ from .user import (
 )
 
 from .thread import (
-    SimpleThreadUser,
-    SimpleThreadComment,
-    SimpleThread,
-    SimpleThreadWithComments
+    ThreadUser,
+    ThreadComment,
+    Thread,
+    ThreadWithComments
 )
 
 from .course import (
@@ -22,8 +22,8 @@ __all__ = [
     'User',
     'CourseInfo',
     'CourseRole',
-    'SimpleThreadUser',
-    'SimpleThreadComment',
-    'SimpleThread',
-    'SimpleThreadWithComments',
+    'ThreadUser',
+    'ThreadComment',
+    'Thread',
+    'ThreadWithComments',
 ]
