@@ -14,6 +14,7 @@ print(f"Hello {user.name}!")
 # convert active courses into pandas df
 active_courses_df = pd.DataFrame(
     [course.to_dict() for course in active_courses])
-print(active_courses_df)
-threads = ed.list_threads(course_id=active_courses[0].id)
-print(threads)
+threads = ed.list_all_threads(course_id=14448)
+student_thread = [
+    thread for thread in threads if thread.user and thread.user.course_role == "student"]
+print(f"Total number of threads: {len(threads)}")

@@ -239,6 +239,46 @@ class EdAPI:
             f"Failed to list threads for course {course_id}.", response.content
         )
 
+    def list_all_threads(self, course_id: int) -> list[Thread]:
+        """
+        Retrieve all threads in a course. This is done by paginating through the threads.
+
+
+        GET /api/courses/<course_id>/threads
+        """
+        threads = []
+        offset = 0
+        while True:
+            try:
+                new_threads = self.list_threads(
+                    course_id, limit=100, offset=offset)
+            except Exception as e:
+                print(e)
+                break
+            if not new_threads:
+                break
+            threads.extend(new_threads)
+            offset += 100
+        return threads
+
+    def list_all_students_threads(self, course_id: int) -> list[Thread]:
+        """
+        Retrieve all threads by annonymous or user with role of studetn in a course. This is done by paginating through the threads.
+
+
+        GET /api/courses/<course_id>/threads
+        """
+        threads = self.list_all_threads(course_id)
+        student_threads = []
+        for thread in threads:
+            # Include if thread is anonymous (user is None)
+            if thread.user is None:
+                student_threads.append(thread)
+        # Include if thread has a user with role "student"
+            elif thread.user and thread.user.course_role == "student":
+                student_threads.append(thread)
+        return student_threads
+
     def list_last_updated_threads(self, course_id: int, date: datetime, limit=100, offset=0, sort="new") -> list[Thread]:
         """
         Retrieve list of threads, with the given limit, offset, and sort.

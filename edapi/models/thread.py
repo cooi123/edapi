@@ -7,6 +7,7 @@ class ThreadUser(BaseModel):
     """Simplified user information."""
     id: int
     name: str
+    course_role: Optional[str] = None
 
 
 class ThreadComment(BaseModel):
@@ -41,6 +42,10 @@ class Thread(BaseModel):
     created_at: datetime
     updated_at: datetime
     user: Optional[ThreadUser] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert Thread to a dictionary"""
+        return self.model_dump()
 
     class Config:
         extra = 'ignore'  # Ignore extra fields in the API response
